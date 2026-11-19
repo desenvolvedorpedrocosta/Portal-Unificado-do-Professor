@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10243a">
+  <meta name="description" content="Portal unificado de consulta e ferramentas para professores e gestores da rede estadual de São Paulo.">
+  <title>Portal Unificado do Professor | SEDUC-SP</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script src="assets/js/api.js" defer></script>
+  <script src="assets/js/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#inicio" aria-label="Portal Unificado do Professor - início">
+        <span class="brand-mark">PU</span>
+        <span class="brand-copy">
+          <strong>Portal Unificado</strong>
+          <small>PROFESSOR · SÃO PAULO</small>
+        </span>
+      </a>
+      <div class="header-right">
+        <span class="network-status"><i id="apiDot" class="status-dot"></i><span id="apiStatus">Conectando à base...</span></span>
+        <span class="header-tag">SEDUC-SP</span>
+      </div>
+    </div>
+  </header>
+
+  <main id="inicio" class="page-shell">
+    <section class="intro-block">
+      <div class="eyebrow"><span class="eyebrow-line"></span> FERRAMENTAS PARA A REDE ESTADUAL</div>
+      <h1>Informação para<br><span>decisões melhores.</span></h1>
+      <p class="intro-text">Um espaço único para consultar escolas, acompanhar publicações oficiais e entender seus direitos na carreira docente.</p>
+    </section>
+
+    <nav class="main-tabs" aria-label="Módulos do portal" role="tablist">
+      <button class="tab-button active" role="tab" aria-selected="true" aria-controls="panel-raiox" data-tab="raiox"><span class="tab-number">01</span><span>Raio-X das Escolas</span></button>
+      <button class="tab-button" role="tab" aria-selected="false" aria-controls="panel-doe" data-tab="doe"><span class="tab-number">02</span><span>Radar DOE</span></button>
+      <button class="tab-button" role="tab" aria-selected="false" aria-controls="panel-carreira" data-tab="carreira"><span class="tab-number">03</span><span>Calculadoras</span></button>
+      <button class="tab-button" role="tab" aria-selected="false" aria-controls="panel-legislacao" data-tab="legislacao"><span class="tab-number">04</span><span>Legislação IA</span></button>
+      <button class="tab-button" role="tab" aria-selected="false" aria-controls="panel-vantagens" data-tab="vantagens"><span class="tab-number">05</span><span>Vantagens e Direitos</span></button>
+    </nav>
+
+    <section id="panel-raiox" class="tab-panel active" role="tabpanel">
+      <div class="module-heading">
+        <div>
+          <div class="section-kicker">MÓDULO 01 · CONSULTA CADASTRAL</div>
+          <h2>Raio-X das Escolas</h2>
+          <p>Encontre uma unidade estadual e consulte seus dados cadastrais. A pesquisa aceita nome, CIE, INEP, município ou Diretoria de Ensino.</p>
+        </div>
+        <div class="module-icon" aria-hidden="true">⌕</div>
+      </div>
+
+      <div class="search-card">
+        <label for="schoolQuery">Qual escola você procura?</label>
+        <div class="search-row">
+          <div class="search-input-wrap"><span class="search-symbol" aria-hidden="true">⌕</span><input id="schoolQuery" type="search" autocomplete="off" placeholder="Digite o nome, CIE, INEP ou município..." maxlength="120"></div>
+          <button id="searchButton" class="primary-button" type="button"><span>Pesquisar</span><span aria-hidden="true">→</span></button>
+        </div>
+        <div class="search-foot"><span>Exemplo: Escola Estadual em Franco da Rocha</span><span id="resultCount" class="result-count">Base de consulta</span></div>
+      </div>
+
+      <div class="results-layout">
+        <section class="results-column" aria-label="Resultados da pesquisa">
+          <div class="content-label"><span>RESULTADOS</span><span id="resultsCaption">Aguardando pesquisa</span></div>
+          <div id="resultsList" class="results-list">
+            <div class="empty-state compact-empty"><span class="empty-icon">⌕</span><strong>Pesquise uma unidade escolar</strong><p>Os resultados aparecerão aqui, com identificação e localização de cada escola.</p></div>
+          </div>
+        </section>
+
+        <section class="detail-column" aria-label="Detalhes da escola selecionada">
+          <div class="content-label"><span>FICHA DA UNIDADE</span><span id="detailSource">DADOS CADASTRAIS</span></div>
+          <div id="schoolDetail" class="detail-card">
+            <div class="empty-state detail-empty"><span class="detail-emblem">PU</span><strong>Selecione uma escola</strong><p>Escolha um resultado para visualizar os dados cadastrais e, quando disponíveis, os indicadores históricos.</p></div>
+          </div>
+        </section>
+      </div>
+
+      <div class="source-note"><span class="source-symbol">i</span><p><strong>Sobre os dados:</strong> o cadastro inicial é importado da exportação oficial Localize Escola (FDE/SEDUC-SP). A exportação do Localize Escola pode não trazer CIE/INEP. O portal utiliza um identificador interno e vincula indicadores por códigos oficiais ou correspondência exata e única de nome, município e Diretoria.</p><a href="https://pesquisaseduc.fde.sp.gov.br/localize_escola" target="_blank" rel="noopener noreferrer">Consultar Localize Escola (FDE) ↗</a></div>
+    </section>
+
+    <section id="panel-doe" class="tab-panel coming-panel" role="tabpanel" hidden>
+      <div class="coming-card"><span class="coming-number">02</span><div class="section-kicker">PRÓXIMO MÓDULO</div><h2>Radar DOE</h2><p>Pesquisa de convocações, concursos, atribuição, remoção e publicações funcionais no Diário Oficial.</p><span class="coming-label">EM DESENVOLVIMENTO</span></div>
+    </section>
+    <section id="panel-carreira" class="tab-panel coming-panel" role="tabpanel" hidden>
+      <div class="coming-card"><span class="coming-number">03</span><div class="section-kicker">MÓDULO PLANEJADO</div><h2>Calculadoras de Carreira</h2><p>Simulações de faltas, bonificação, evolução funcional e tabelas remuneratórias por regra e vigência.</p><span class="coming-label">EM DESENVOLVIMENTO</span></div>
+    </section>
+    <section id="panel-legislacao" class="tab-panel coming-panel" role="tabpanel" hidden>
+      <div class="coming-card"><span class="coming-number">04</span><div class="section-kicker">MÓDULO PLANEJADO</div><h2>Consultoria de Legislação com IA</h2><p>Consulta fundamentada em normas estaduais cadastradas, com referência aos artigos e controle de vigência.</p><span class="coming-label">EM DESENVOLVIMENTO</span></div>
+    </section>
+    <section id="panel-vantagens" class="tab-panel coming-panel" role="tabpanel" hidden>
+      <div class="coming-card"><span class="coming-number">05</span><div class="section-kicker">MÓDULO PLANEJADO</div><h2>Simulador de Vantagens e Direitos</h2><p>Previsões de quinquênio e sexta-parte conforme o regime funcional e as regras aplicáveis.</p><span class="coming-label">EM DESENVOLVIMENTO</span></div>
+    </section>
+
+    <footer class="site-footer"><span>PORTAL UNIFICADO DO PROFESSOR</span><span>Projeto independente · Dados públicos oficiais</span></footer>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
