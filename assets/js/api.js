@@ -45,6 +45,11 @@
     return '';
   }
 
+  function extractCieFromEmail(email) {
+    var match = String(email || '').trim().toUpperCase().match(/^E(\d{6})A@EDUCACAO\.SP\.GOV\.BR$/);
+    return match ? match[1] : '';
+  }
+
   function normalizeSchoolRecord(school) {
     var source = school && typeof school === 'object' ? school : {};
     var result = Object.assign({}, source);
@@ -62,6 +67,7 @@
     result.zona = readAlias(source, ['zona', 'ZONA']);
     result.telefones = readAlias(source, ['telefones', 'telefone', 'TELEFONES']);
     result.email = readAlias(source, ['email', 'eMail', 'EMAIL']);
+    result.cieDerivadoEmail = readAlias(source, ['cieDerivadoEmail', 'CIE_EXTRAIDO_EMAIL']) || extractCieFromEmail(result.email);
     result.detalhes = source.detalhes || source.details || source.DETALHES || {};
     return result;
   }
@@ -89,6 +95,8 @@
     add('id', school.idInterno);
     add('cie', school.cie);
     add('inep', school.codigoInep);
+    // Código extraído do e-mail institucional é chave auxiliar, não CIE validado no cadastro.
+    add('cie', school.cieDerivadoEmail);
 
     // Alguns formatos intermediários usam somente "codigo" ou uma chave composta.
     // Tentamos "codigo" como ID e CIE, sem assumir previamente seu significado.
@@ -96,6 +104,10 @@
     add('id', genericCode);
     add('cie', genericCode);
     add('id', readAlias(value, ['chaveComposta', 'schoolKey', 'identificadorApi', 'chaveNormalizada']));
+    if (school.nome && school.municipio && school.diretoria) {
+      var identity = [school.nome, school.municipio, school.diretoria].map(function (part) { return String(part).trim(); }).join('|');
+      add('identity', identity);
+    }
     return candidates;
   }
 
@@ -149,7 +161,12 @@
     var params = {};
     if (candidate.type === 'cie') params.cie = candidate.value;
     else if (candidate.type === 'inep') params.inep = candidate.value;
-    else params.id = candidate.value;
+    else if (candidate.type === 'identity') {
+      var parts = String(candidate.value || '').split('|');
+      params.nome = parts[0] || '';
+      params.municipio = parts[1] || '';
+      params.diretoria = parts[2] || '';
+    } else params.id = candidate.value;
     return params;
   }
 
@@ -188,11 +205,13 @@
   async function obterIndicadores(identificador, tipo) {
     var candidates = buildIdentifierCandidates(identificador, tipo);
     var lastError = null;
+    var hasSuccessfulResponse = false;
     var emptyResponse = { ok: true, total: 0, indicadores: [] };
 
     for (var i = 0; i < candidates.length; i++) {
       try {
         var data = await request('getIndicadores', paramsFor(candidates[i]));
+        if (data) hasSuccessfulResponse = true;
         if (data && Array.isArray(data.indicadores) && data.indicadores.length) return data;
         if (data) emptyResponse = data;
       } catch (error) {
@@ -201,7 +220,7 @@
       }
     }
 
-    if (lastError && !(identificador && typeof identificador === 'object')) throw lastError;
+    if (lastError && (!hasSuccessfulResponse || !lastError.apiCode || NOT_FOUND_CODES.indexOf(lastError.apiCode) < 0)) throw lastError;
     return emptyResponse;
   }
 
