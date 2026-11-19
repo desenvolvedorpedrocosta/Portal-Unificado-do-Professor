@@ -112,3 +112,24 @@
 @media(max-width:768px){.school-address-tools{gap:9px 12px;padding:11px 13px}.school-address-full{font-size:9px}.school-map-link{font-size:8.5px}}
 @media(max-width:480px){.school-address-tools{align-items:flex-start;flex-direction:column;padding:10px 11px}.school-map-link{padding:7px 8px}.code-pill-note{font-size:7.5px}}
 
+
+
+/* Indicadores históricos IDESP/IDEB — apresentação por etapa, ano, nota e meta */
+.indicator-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.indicator-group{min-width:0;padding:13px;border:1px solid #e4ebef;border-radius:10px;background:#fbfdfe}
+.indicator-group-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
+.indicator-group-head strong{display:inline-flex;align-items:center;padding:5px 8px;border-radius:5px;background:#eaf2f6;color:#183d59;font-size:10px;letter-spacing:.06em}
+.indicator-group-head span{color:#64798a;font-size:10px;text-align:right}
+.indicator-component{margin:-2px 0 8px;color:#8795a0;font-size:9px}
+.indicator-chart-row{display:grid;grid-template-columns:40px minmax(35px,1fr) minmax(66px,auto);align-items:center;gap:8px;margin:9px 0}
+.indicator-year{color:#718394;font-size:9px;font-variant-numeric:tabular-nums}
+.indicator-track{position:relative;display:block;height:8px;min-width:0;border-radius:20px;background:#e8eef2;overflow:hidden}
+.indicator-track i{display:block;height:100%;border-radius:20px;background:linear-gradient(90deg,#246b8f,#59b5ac)}
+.indicator-result{display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-width:66px}
+.indicator-result strong{color:#29485e;font-size:11px;font-variant-numeric:tabular-nums}
+.indicator-meta{color:#718594;font-size:8px;white-space:nowrap}
+.indicator-footnote{margin-top:10px;color:#84929c;font-size:9px;line-height:1.5}
+@media(max-width:768px){.indicator-groups{grid-template-columns:minmax(0,1fr);gap:9px}.indicator-group{padding:11px}.indicator-chart-row{grid-template-columns:36px minmax(30px,1fr) minmax(62px,auto);gap:7px;margin:8px 0}.indicator-group-head strong{font-size:9px}.indicator-group-head span{font-size:9px}.indicator-result strong{font-size:10px}.indicator-meta{font-size:7.5px}.indicator-footnote{font-size:8px}}
+@media(max-width:480px){.indicator-group{padding:10px}.indicator-chart-row{grid-template-columns:33px minmax(24px,1fr) minmax(58px,auto);gap:6px}.indicator-year{font-size:8px}.indicator-track{height:7px}.indicator-result{min-width:58px}.indicator-result strong{font-size:9.5px}.indicator-meta{font-size:7px}}
+
+.indicator-error{border-color:#f0d8d8;background:#fffafa;color:#8e3e3e}
