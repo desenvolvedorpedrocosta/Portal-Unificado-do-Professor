@@ -1,6 +1,6 @@
 /**
  * Cliente JSONP do Portal Unificado.
- * Preserve a URL /exec já configurada nesta constante ao atualizar o arquivo.
+ * URL oficial da implantação Apps Script do Portal Unificado. Preserve esta URL ao atualizar o arquivo.
  * Não coloque chaves secretas neste arquivo.
  */
 (function (global) {
