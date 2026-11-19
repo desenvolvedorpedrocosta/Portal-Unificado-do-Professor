@@ -223,7 +223,7 @@
     var school = normalizeSchoolRecord(data.escola || data);
     var details = school.detalhes || {};
     var name = school.nome || readSchoolValue(details, ['NOME_ESCOLA', 'Nome_da_Escola']) || 'Escola sem nome cadastrado';
-    var indicatorRows = indicators && indicators.indicadores ? indicators.indicadores : [];
+    var indicatorRows = indicators && Array.isArray(indicators.indicadores) ? indicators.indicadores : [];
     var addressRaw = readSchoolValue(school, ['endereco', 'Endereco_Completo', 'ENDERECO_COMPLETO']) ||
       readSchoolValue(details, ['ENDERECO_COMPLETO', 'Endereco_Completo', 'LOGRADOURO', 'ENDERECO']);
     var addressNumber = readSchoolValue(details, ['NUMERO', 'NUMERO_ENDERECO']) || readSchoolValue(school, ['numero']);
@@ -267,29 +267,85 @@
       '<div class="school-codes"><span class="code-pill">CIE: ' + escapeHtml(displayedCie || 'não informado na exportação') + cieNote + '</span><span class="code-pill">INEP: ' + escapeHtml(school.codigoInep || 'não informado na exportação') + '</span><span class="code-pill">ID interno: ' + escapeHtml(school.idInterno || 'não disponível') + '</span></div></div>' +
       '<div class="detail-grid">' + fields.map(function (f) { return field(f[0], f[1]); }).join('') + '</div>' +
       addressAuxHtml +
-      '<div class="indicator-block"><h4>Indicadores históricos</h4>' + renderIndicators(indicatorRows, school) + '</div>';
+      '<div class="indicator-block"><h4>Indicadores históricos</h4>' + renderIndicators(indicatorRows, school, indicators) + '</div>';
   }
 
-  function renderIndicators(rows, school) {
-    if (!rows.length) return '<div class="indicator-empty">Ainda não há indicadores históricos vinculados a esta unidade. Quando os arquivos oficiais de IDESP e IDEB forem importados, os resultados aparecerão aqui.</div>';
+  function indicatorField(item, aliases) {
+    return readSchoolValue(item, aliases);
+  }
+
+  function normalizeStageLabel(value) {
+    var raw = String(value || '').trim();
+    var normalized = normalizeFieldName(raw);
+    if (!normalized) return 'Etapa não informada';
+    if (['anosiniciais','ensinofundamentali','fundamentali','fundamental1','efai','efanosiniciais','1ao5ano','1a5ano'].indexOf(normalized) >= 0 || /anosiniciais/.test(normalized)) return 'Anos Iniciais';
+    if (['anosfinais','ensinofundamentalii','fundamentalii','fundamental2','efaf','efanosfinais','6ao9ano','6a9ano'].indexOf(normalized) >= 0 || /anosfinais/.test(normalized)) return 'Anos Finais';
+    if (['ensinomedio','medio','em','ensinomedioregular'].indexOf(normalized) >= 0 || /ensinomedio/.test(normalized)) return 'Ensino Médio';
+    return raw;
+  }
+
+  function parseIndicatorNumber(value) {
+    var text = String(value === null || value === undefined ? '' : value).trim().replace(/\s/g, '');
+    if (!text) return null;
+    if (text.indexOf(',') >= 0 && text.indexOf('.') >= 0) text = text.replace(/\./g, '').replace(',', '.');
+    else text = text.replace(',', '.');
+    var number = Number(text);
+    return isFinite(number) ? number : null;
+  }
+
+  function formatIndicatorNumber(value) {
+    var number = parseIndicatorNumber(value);
+    return number === null ? escapeHtml(value) : number.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function renderIndicators(rows, school, response) {
+    if (!rows.length) {
+      if (response && (response.unavailable || response.ok === false)) {
+        return '<div class="indicator-empty indicator-error">Não foi possível consultar os indicadores históricos neste momento. A ficha cadastral foi carregada, mas a conexão com a consulta de indicadores falhou. Tente novamente mais tarde.</div>';
+      }
+      return '<div class="indicator-empty">Ainda não há indicadores históricos vinculados a esta unidade. Quando os arquivos oficiais de IDESP e IDEB forem importados, os resultados aparecerão aqui.</div>';
+    }
     var groups = {};
     rows.forEach(function (item) {
-      var key = [item.INDICADOR || 'Indicador', item.ETAPA_ENSINO || 'Etapa não identificada', item.COMPONENTE_CURRICULAR || ''].join('|');
+      var indicator = String(indicatorField(item, ['INDICADOR','indicator']) || 'Indicador').toUpperCase();
+      var stage = normalizeStageLabel(indicatorField(item, ['ETAPA_ENSINO','etapaEnsino','stage']));
+      var component = String(indicatorField(item, ['COMPONENTE_CURRICULAR','componenteCurricular','component']) || '');
+      var key = [indicator, stage, component].join('|');
       if (!groups[key]) groups[key] = [];
       groups[key].push(item);
     });
-    return '<div class="indicator-groups">' + Object.keys(groups).map(function (key) {
-      var group = groups[key].slice().sort(function (a,b) { return Number(a.ANO_REFERENCIA)-Number(b.ANO_REFERENCIA); });
+    var orderedKeys = Object.keys(groups).sort(function (a, b) {
+      var order = { IDESP: 1, IDEB: 2 };
+      var ai = a.split('|')[0], bi = b.split('|')[0];
+      return (order[ai] || 9) - (order[bi] || 9) || a.localeCompare(b, 'pt-BR');
+    });
+    return '<div class="indicator-groups">' + orderedKeys.map(function (key) {
+      var group = groups[key].slice().sort(function (a, b) {
+        return Number(indicatorField(a, ['ANO_REFERENCIA','anoReferencia','year'])) - Number(indicatorField(b, ['ANO_REFERENCIA','anoReferencia','year']));
+      });
       var first = group[0];
-      var values = group.map(function (x) { return Number(String(x.VALOR).replace(',','.')); }).filter(function (x) { return isFinite(x); });
-      var max = Math.max(10, Math.max.apply(null, values.concat([0])));
+      var indicatorName = String(indicatorField(first, ['INDICADOR','indicator']) || 'Indicador').toUpperCase();
+      var stageName = normalizeStageLabel(indicatorField(first, ['ETAPA_ENSINO','etapaEnsino','stage']));
+      var componentName = indicatorField(first, ['COMPONENTE_CURRICULAR','componenteCurricular','component']);
       var rowsHtml = group.map(function (item) {
-        var val = Number(String(item.VALOR).replace(',','.'));
-        var width = isFinite(val) ? Math.max(1, Math.min(100, (val / max) * 100)) : 0;
-        return '<div class="indicator-chart-row"><span class="indicator-year">' + escapeHtml(item.ANO_REFERENCIA) + '</span><span class="indicator-track"><i style="width:' + width.toFixed(1) + '%"></i></span><strong>' + escapeHtml(item.VALOR) + '</strong></div>';
+        var year = indicatorField(item, ['ANO_REFERENCIA','anoReferencia','year']);
+        var value = indicatorField(item, ['VALOR','valor','nota','resultado']);
+        var meta = indicatorField(item, ['META','meta','VALOR_META','META_REFERENCIA']);
+        var numericValue = parseIndicatorNumber(value);
+        var width = numericValue === null ? 0 : Math.max(0, Math.min(100, numericValue / 10 * 100));
+        var metaNumber = parseIndicatorNumber(meta);
+        var metaHtml = metaNumber === null ? '' : '<span class="indicator-meta">Meta ' + formatIndicatorNumber(metaNumber) + '</span>';
+        return '<div class="indicator-chart-row">' +
+          '<span class="indicator-year">' + escapeHtml(year) + '</span>' +
+          '<span class="indicator-track" aria-label="Resultado ' + escapeHtml(value) + ' de 10"><i style="width:' + width.toFixed(1) + '%"></i></span>' +
+          '<span class="indicator-result"><strong>' + formatIndicatorNumber(value) + '</strong>' + metaHtml + '</span>' +
+          '</div>';
       }).join('');
-      return '<section class="indicator-group"><div class="indicator-group-head"><strong>' + escapeHtml(first.INDICADOR) + '</strong><span>' + escapeHtml(first.ETAPA_ENSINO || 'Etapa não informada') + '</span></div>' + (first.COMPONENTE_CURRICULAR ? '<div class="indicator-component">' + escapeHtml(first.COMPONENTE_CURRICULAR) + '</div>' : '') + rowsHtml + '</section>';
-    }).join('') + '</div><div class="indicator-footnote">Resultados conforme o arquivo oficial importado. Ausência de IDEB não significa nota zero: pode decorrer de critérios de participação ou divulgação. Verifique ano, etapa e metodologia antes de comparar séries diferentes.</div>';
+      return '<section class="indicator-group indicator-group-' + escapeHtml(indicatorName.toLowerCase()) + '">' +
+        '<div class="indicator-group-head"><strong>' + escapeHtml(indicatorName) + '</strong><span>' + escapeHtml(stageName) + '</span></div>' +
+        (componentName ? '<div class="indicator-component">' + escapeHtml(componentName) + '</div>' : '') + rowsHtml +
+        '</section>';
+    }).join('') + '</div><div class="indicator-footnote">Resultados conforme os arquivos oficiais importados. Metas são exibidas somente quando constarem na fonte. Ausência de IDEB não significa nota zero: pode decorrer dos critérios de participação ou divulgação. Confira ano, etapa e metodologia antes de comparar séries diferentes.</div>';
   }
 
   async function doSearch() {
@@ -324,8 +380,8 @@
       var detailPromise = window.PortalAPI.obterEscola(selectedSchool, null, selectedSchool).catch(function (error) {
         return { ok: true, escola: selectedSchool, fallbackFromSearch: true, detailWarning: error.message };
       });
-      var indicatorsPromise = window.PortalAPI.obterIndicadores(selectedSchool).catch(function () {
-        return { ok: true, total: 0, indicadores: [] };
+      var indicatorsPromise = window.PortalAPI.obterIndicadores(selectedSchool).catch(function (error) {
+        return { ok: false, unavailable: true, total: null, indicadores: [], message: error && error.message ? error.message : 'Falha ao consultar indicadores.' };
       });
       var results = await Promise.all([detailPromise, indicatorsPromise]);
       var detailResult = results[0] || {};
