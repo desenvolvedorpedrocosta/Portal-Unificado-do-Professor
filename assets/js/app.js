@@ -155,36 +155,118 @@
     return '<div class="detail-field"><small>' + escapeHtml(label) + '</small><strong>' + escapeHtml(value) + '</strong></div>';
   }
 
+
+  function normalizeAddressNumber(value) {
+    var number = String(value === null || value === undefined ? '' : value).trim();
+    if (!number) return '';
+    if (/^(?:S\s*\/\s*N|SN)$/i.test(number)) return 'S/N';
+    if (/^\d+$/.test(number)) return number.replace(/^0+(?=\d)/, '');
+    return number;
+  }
+
+  function formatAddressForDisplay(rawAddress, separateNumber) {
+    var address = String(rawAddress === null || rawAddress === undefined ? '' : rawAddress)
+      .replace(/\s+/g, ' ').trim();
+    var externalNumber = normalizeAddressNumber(separateNumber);
+    if (!address) return externalNumber ? 'Nº ' + externalNumber : '';
+
+    var suffix = address.match(/\s+-\s+(RUA|AVENIDA|AV\.?|ESTRADA|PRACA|PRAÇA|ALAMEDA|TRAVESSA|RODOVIA|ROD\.?|LARGO|VIELA|VIA|ACESSO|PASSAGEM)\s*$/i);
+    var prefix = address.match(/^(RUA|AVENIDA|AV\.?|ESTRADA|PRACA|PRAÇA|ALAMEDA|TRAVESSA|RODOVIA|ROD\.?|LARGO|VIELA|VIA|ACESSO|PASSAGEM)\s+/i);
+    var type = '';
+    var streetAndNumber = address;
+
+    if (suffix) {
+      type = suffix[1].toUpperCase().replace(/\.$/, '');
+      streetAndNumber = address.slice(0, suffix.index).trim();
+    } else if (prefix) {
+      type = prefix[1].toUpperCase().replace(/\.$/, '');
+      streetAndNumber = address.slice(prefix[0].length).trim();
+    }
+
+    // Algumas exportações repetem o tipo no início e no sufixo. Evita duplicá-lo.
+    if (type) {
+      var repeatedPrefix = streetAndNumber.match(/^(RUA|AVENIDA|AV\.?|ESTRADA|PRACA|PRAÇA|ALAMEDA|TRAVESSA|RODOVIA|ROD\.?|LARGO|VIELA|VIA|ACESSO|PASSAGEM)\s+/i);
+      if (repeatedPrefix && repeatedPrefix[1].toUpperCase().replace(/\.$/, '') === type) {
+        streetAndNumber = streetAndNumber.slice(repeatedPrefix[0].length).trim();
+      }
+    }
+
+    var numberMatch = streetAndNumber.match(/^(.*),\s*(S\s*\/\s*N|SN|\d{1,8})$/i);
+    var street = streetAndNumber;
+    var number = externalNumber;
+    if (numberMatch) {
+      street = numberMatch[1].trim();
+      number = normalizeAddressNumber(numberMatch[2]) || number;
+    }
+
+    var formatted = type ? type + ' ' + street : street;
+    if (number) formatted += (formatted ? ', ' : '') + number;
+    return formatted.trim();
+  }
+
+  function extractCieFromInstitutionalEmail(email) {
+    var value = String(email || '').trim();
+    var match = value.match(/^E(\d{6})A@EDUCACAO\.SP\.GOV\.BR$/i);
+    return match ? match[1] : '';
+  }
+
+  function buildCompleteAddress(address, bairro, municipio, cep) {
+    var parts = [];
+    if (address) parts.push(address);
+    if (bairro) parts.push(bairro);
+    if (municipio) parts.push(municipio + '/SP');
+    if (cep) parts.push('CEP ' + cep);
+    return parts.join(' · ');
+  }
+
   function renderSchool(data, indicators) {
     var school = normalizeSchoolRecord(data.escola || data);
     var details = school.detalhes || {};
     var name = school.nome || readSchoolValue(details, ['NOME_ESCOLA', 'Nome_da_Escola']) || 'Escola sem nome cadastrado';
     var indicatorRows = indicators && indicators.indicadores ? indicators.indicadores : [];
-    var address = readSchoolValue(school, ['endereco', 'Endereco_Completo', 'ENDERECO_COMPLETO']) ||
+    var addressRaw = readSchoolValue(school, ['endereco', 'Endereco_Completo', 'ENDERECO_COMPLETO']) ||
       readSchoolValue(details, ['ENDERECO_COMPLETO', 'Endereco_Completo', 'LOGRADOURO', 'ENDERECO']);
+    var addressNumber = readSchoolValue(details, ['NUMERO', 'NUMERO_ENDERECO']) || readSchoolValue(school, ['numero']);
+    var addressFallback = [
+      readSchoolValue(details, ['LOGRADOURO', 'RUA', 'AVENIDA']),
+      addressNumber,
+      readSchoolValue(details, ['COMPLEMENTO'])
+    ].filter(Boolean).join(', ');
+    var formattedAddress = formatAddressForDisplay(addressRaw || addressFallback, addressNumber);
+    var neighborhood = readSchoolValue(details, ['DISTRITO_BAIRRO', 'BAIRRO']) || readSchoolValue(school, ['bairro']);
+    var cep = readSchoolValue(details, ['CEP']) || readSchoolValue(school, ['cep']);
+    var municipality = school.municipio || readSchoolValue(details, ['MUNICIPIO', 'Municipio']);
+    var email = school.email || readSchoolValue(details, ['EMAIL', 'E_MAIL']);
+    var extractedCie = !school.cie ? extractCieFromInstitutionalEmail(email) : '';
+    var displayedCie = school.cie || extractedCie;
+    var completeAddress = buildCompleteAddress(formattedAddress, neighborhood, municipality, cep);
+    var mapQuery = completeAddress || [name, municipality, 'SP'].filter(Boolean).join(', ');
+    var mapUrl = mapQuery ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(mapQuery) : '';
+    var addressAuxHtml = completeAddress
+      ? '<div class="school-address-tools"><div class="school-address-copy"><span class="school-address-label">ENDEREÇO COMPLETO</span><p class="school-address-full">' + escapeHtml(completeAddress) + '</p></div>' +
+        (mapUrl ? '<a class="school-map-link" href="' + escapeHtml(mapUrl) + '" target="_blank" rel="noopener noreferrer">Ver no Google Maps ↗</a>' : '') + '</div>'
+      : '';
+    var cieNote = extractedCie ? '<small class="code-pill-note">(extraído do e-mail institucional)</small>' : '';
     var fields = [
       ['Diretoria de Ensino / URE', school.diretoria],
-      ['Município', school.municipio],
+      ['Município', municipality],
       ['Tipo de escola', school.tipo],
-      ['Endereço', address || [
-        readSchoolValue(details, ['LOGRADOURO', 'RUA', 'AVENIDA']),
-        readSchoolValue(details, ['NUMERO', 'NUMERO_ENDERECO']),
-        readSchoolValue(details, ['COMPLEMENTO'])
-      ].filter(Boolean).join(', ')],
-      ['Bairro / Distrito', readSchoolValue(details, ['DISTRITO_BAIRRO', 'BAIRRO']) || readSchoolValue(school, ['bairro'])],
-      ['CEP', readSchoolValue(details, ['CEP']) || readSchoolValue(school, ['cep'])],
+      ['Endereço', formattedAddress || addressFallback],
+      ['Bairro / Distrito', neighborhood],
+      ['CEP', cep],
       ['Zona', school.zona || readSchoolValue(details, ['ZONA'])],
       ['Telefone', school.telefones || readSchoolValue(details, ['TELEFONES', 'TELEFONE'])],
-      ['E-mail', school.email || readSchoolValue(details, ['EMAIL', 'E_MAIL'])],
+      ['E-mail', email],
       ['Situação cadastral', readSchoolValue(details, ['SITUACAO_CADASTRAL', 'SITUACAO'])],
       ['Última referência da fonte', readSchoolValue(details, ['DATA_REFERENCIA', 'DATA_ATUALIZACAO'])]
     ];
 
     schoolDetail.innerHTML = '<div class="school-detail-head"><div class="section-kicker">FICHA CADASTRAL · REDE ESTADUAL</div>' +
       '<h3>' + escapeHtml(name) + '</h3>' +
-      '<div class="school-subtitle">' + escapeHtml(school.municipio) + (school.diretoria ? ' · ' + escapeHtml(school.diretoria) : '') + '</div>' +
-      '<div class="school-codes"><span class="code-pill">CIE: ' + escapeHtml(school.cie || 'não informado na exportação') + '</span><span class="code-pill">INEP: ' + escapeHtml(school.codigoInep || 'não informado na exportação') + '</span><span class="code-pill">ID interno: ' + escapeHtml(school.idInterno || 'não disponível') + '</span></div></div>' +
+      '<div class="school-subtitle">' + escapeHtml(municipality) + (school.diretoria ? ' · ' + escapeHtml(school.diretoria) : '') + '</div>' +
+      '<div class="school-codes"><span class="code-pill">CIE: ' + escapeHtml(displayedCie || 'não informado na exportação') + cieNote + '</span><span class="code-pill">INEP: ' + escapeHtml(school.codigoInep || 'não informado na exportação') + '</span><span class="code-pill">ID interno: ' + escapeHtml(school.idInterno || 'não disponível') + '</span></div></div>' +
       '<div class="detail-grid">' + fields.map(function (f) { return field(f[0], f[1]); }).join('') + '</div>' +
+      addressAuxHtml +
       '<div class="indicator-block"><h4>Indicadores históricos</h4>' + renderIndicators(indicatorRows, school) + '</div>';
   }
 
