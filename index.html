@@ -93,9 +93,48 @@
       <div class="coming-card"><span class="coming-number">05</span><div class="section-kicker">MÓDULO PLANEJADO</div><h2>Simulador de Vantagens e Direitos</h2><p>Previsões de quinquênio e sexta-parte conforme o regime funcional e as regras aplicáveis.</p><span class="coming-label">EM DESENVOLVIMENTO</span></div>
     </section>
 
-    <footer class="site-footer"><span>PORTAL UNIFICADO DO PROFESSOR</span><span>Projeto independente · Dados públicos oficiais</span></footer>
+    <footer class="site-footer">
+      <span>PORTAL UNIFICADO DO PROFESSOR</span>
+      <span class="footer-right">
+        <span class="footer-project">Projeto independente · Dados públicos oficiais</span>
+        <span class="footer-credit"><span id="footerYear">2026</span> | Criado e Desenvolvido por Pedro Costa · <a id="footerCreditEmail" href="mailto:desenvolvedorpedrocosta@gmail.com">desenvolvedorpedrocosta@gmail.com</a></span>
+      </span>
+    </footer>
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- VLibras: o widget é carregado de forma assíncrona e não bloqueia o portal. -->
+  <div vw class="enabled">
+    <div vw-access-button class="active"></div>
+    <div vw-plugin-wrapper>
+      <div class="vw-plugin-top-wrapper"></div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var initialized = false;
+      var attempts = 0;
+      function initPortalVLibras() {
+        if (initialized || window.__portalVLibrasUnavailable) return;
+        if (window.VLibras && typeof window.VLibras.Widget === 'function') {
+          try {
+            new window.VLibras.Widget('https://vlibras.gov.br/app');
+            initialized = true;
+            return;
+          } catch (error) {
+            if (window.console && console.warn) console.warn('VLibras não pôde ser inicializado.', error);
+          }
+        }
+        if (attempts < 20) {
+          attempts += 1;
+          window.setTimeout(initPortalVLibras, 500);
+        }
+      }
+      window.initPortalVLibras = initPortalVLibras;
+      window.addEventListener('load', initPortalVLibras);
+    })();
+  </script>
+  <script src="https://vlibras.gov.br/app/vlibras-plugin.js" async onload="window.initPortalVLibras && window.initPortalVLibras()" onerror="window.__portalVLibrasUnavailable=true;document.documentElement.setAttribute('data-vlibras', 'indisponivel')"></script>
 </body>
 </html>
