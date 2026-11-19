@@ -13,6 +13,82 @@
   var toastNode = $('#toast');
   var selectedKey = '';
   var debounceTimer = null;
+  var lastSearchResults = [];
+  var FOOTER_CREDIT_EMAIL = 'desenvolvedorpedrocosta@gmail.com';
+
+
+  function cleanIdentifier(value) {
+    if (value === null || value === undefined) return '';
+    var text = String(value).trim();
+    if (!text || /^(?:—|–|-|null|undefined|n\/?a|não informado|nao informado)$/i.test(text)) return '';
+    return text.replace(/\.0$/, '');
+  }
+
+  function normalizeFieldName(value) {
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  function readSchoolValue(object, aliases) {
+    if (!object || typeof object !== 'object') return '';
+    var byName = {};
+    Object.keys(object).forEach(function (key) {
+      var normalizedKey = normalizeFieldName(key);
+      var current = byName[normalizedKey];
+      var incoming = object[key];
+      if (!Object.prototype.hasOwnProperty.call(byName, normalizedKey) || (!cleanIdentifier(current) && cleanIdentifier(incoming))) {
+        byName[normalizedKey] = incoming;
+      }
+    });
+    for (var i = 0; i < aliases.length; i++) {
+      var key = normalizeFieldName(aliases[i]);
+      if (Object.prototype.hasOwnProperty.call(byName, key)) {
+        var value = byName[key];
+        if (value !== null && value !== undefined && cleanIdentifier(value) !== '') return value;
+      }
+    }
+    return '';
+  }
+
+  function normalizeSchoolRecord(item) {
+    var source = item && typeof item === 'object' ? item : {};
+    var school = Object.assign({}, source);
+    school.cie = cleanIdentifier(readSchoolValue(source, ['cie', 'codigoCie', 'codCie', 'CIE']));
+    school.codigoInep = cleanIdentifier(readSchoolValue(source, ['codigoInep', 'inep', 'coEntidade', 'idInep', 'INEP']));
+    school.idInterno = cleanIdentifier(readSchoolValue(source, [
+      'idInterno', 'ID_INTERNO', 'id_interno', 'identificadorInterno', 'internalId',
+      'schoolId', 'idEscola', 'id', 'chave', 'key', 'identificador', 'codigoInterno'
+    ]));
+    school.nome = readSchoolValue(source, ['nome', 'nomeEscola', 'Nome_da_Escola', 'NOME_ESCOLA', 'escola']);
+    school.municipio = readSchoolValue(source, ['municipio', 'cidade', 'Municipio']);
+    school.diretoria = readSchoolValue(source, ['diretoria', 'diretoriaEnsino', 'Diretoria_de_Ensino', 'ure']);
+    school.tipo = readSchoolValue(source, ['tipo', 'tipoEscola', 'Tipo_de_Ensino']);
+    school.zona = readSchoolValue(source, ['zona', 'ZONA']);
+    school.telefones = readSchoolValue(source, ['telefones', 'telefone', 'TELEFONES']);
+    school.email = readSchoolValue(source, ['email', 'eMail', 'EMAIL']);
+    school.detalhes = source.detalhes || source.details || source.DETALHES || {};
+    return school;
+  }
+
+  function schoolIdentity(school) {
+    school = normalizeSchoolRecord(school);
+    return school.idInterno || school.cie || school.codigoInep || [
+      school.nome, school.municipio, school.diretoria,
+      readSchoolValue(school.detalhes, ['Endereco_Completo', 'ENDERECO_COMPLETO', 'endereco'])
+    ].map(function (part) { return normalizeFieldName(part); }).join('|');
+  }
+
+  function initFooter() {
+    var yearNode = $('#footerYear');
+    var emailNode = $('#footerCreditEmail');
+    var currentYear = new Date().getFullYear();
+    var year = Math.max(2026, currentYear);
+    if (yearNode) yearNode.textContent = String(year);
+    if (emailNode) {
+      emailNode.href = 'mailto:' + FOOTER_CREDIT_EMAIL;
+      emailNode.textContent = FOOTER_CREDIT_EMAIL;
+    }
+  }
 
   function escapeHtml(value) {
     return String(value === null || value === undefined || value === '' ? '—' : value)
@@ -46,15 +122,17 @@
 
   function renderResults(data) {
     var items = data.results || [];
+    lastSearchResults = items.map(normalizeSchoolRecord);
     resultCount.textContent = data.total + (data.total === 1 ? ' resultado' : ' resultados');
     resultsCaption.textContent = items.length ? 'Selecione uma unidade' : 'Nenhuma correspondência';
     if (!items.length) {
       renderEmpty('Nenhuma escola encontrada', 'Tente pesquisar por parte do nome, pelo município ou pelo código CIE/INEP.');
       return;
     }
-    resultsList.innerHTML = items.map(function (item, index) {
-      var key = item.cie || item.codigoInep || item.idInterno || String(index);
-      return '<button type="button" class="result-item" data-cie="' + escapeHtml(item.cie) + '" data-inep="' + escapeHtml(item.codigoInep) + '" data-id="' + escapeHtml(item.idInterno) + '" data-key="' + escapeHtml(key) + '">' +
+    resultsList.innerHTML = lastSearchResults.map(function (item, index) {
+      // Os dados da escola permanecem em memória. Não usamos escapeHtml em
+      // atributos de ID, pois o placeholder visual "—" não pode virar chave.
+      return '<button type="button" class="result-item" data-result-index="' + index + '">' +
         '<span class="result-arrow" aria-hidden="true">↗</span>' +
         '<strong>' + escapeHtml(item.nome) + '</strong>' +
         '<span class="result-meta"><span>' + escapeHtml(item.municipio) + '</span><span>CIE: ' + escapeHtml(item.cie || 'não informado') + '</span><span>INEP: ' + escapeHtml(item.codigoInep || 'não informado') + '</span></span>' +
@@ -65,8 +143,10 @@
       button.addEventListener('click', function () {
         Array.prototype.forEach.call(resultsList.querySelectorAll('.result-item'), function (b) { b.classList.remove('selected'); });
         button.classList.add('selected');
-        selectedKey = button.getAttribute('data-key');
-        selectSchool(button.getAttribute('data-cie'), button.getAttribute('data-inep'), button.getAttribute('data-id'));
+        var index = Number(button.getAttribute('data-result-index'));
+        var selectedSchool = lastSearchResults[index];
+        selectedKey = schoolIdentity(selectedSchool);
+        if (selectedSchool) selectSchool(selectedSchool);
       });
     });
   }
@@ -76,28 +156,34 @@
   }
 
   function renderSchool(data, indicators) {
-    var school = data.escola;
+    var school = normalizeSchoolRecord(data.escola || data);
     var details = school.detalhes || {};
-    var name = school.nome || details.NOME_ESCOLA || 'Escola sem nome cadastrado';
-    var indicatorRows = indicators.indicadores || [];
+    var name = school.nome || readSchoolValue(details, ['NOME_ESCOLA', 'Nome_da_Escola']) || 'Escola sem nome cadastrado';
+    var indicatorRows = indicators && indicators.indicadores ? indicators.indicadores : [];
+    var address = readSchoolValue(school, ['endereco', 'Endereco_Completo', 'ENDERECO_COMPLETO']) ||
+      readSchoolValue(details, ['ENDERECO_COMPLETO', 'Endereco_Completo', 'LOGRADOURO', 'ENDERECO']);
     var fields = [
       ['Diretoria de Ensino / URE', school.diretoria],
       ['Município', school.municipio],
       ['Tipo de escola', school.tipo],
-      ['Endereço', [details.LOGRADOURO, details.NUMERO, details.COMPLEMENTO].filter(Boolean).join(', ')],
-      ['Bairro / Distrito', details.DISTRITO_BAIRRO],
-      ['CEP', details.CEP],
-      ['Zona', school.zona || details.ZONA],
-      ['Telefone', school.telefones || details.TELEFONES],
-      ['E-mail', school.email || details.EMAIL],
-      ['Situação cadastral', details.SITUACAO_CADASTRAL],
-      ['Última referência da fonte', details.DATA_REFERENCIA]
+      ['Endereço', address || [
+        readSchoolValue(details, ['LOGRADOURO', 'RUA', 'AVENIDA']),
+        readSchoolValue(details, ['NUMERO', 'NUMERO_ENDERECO']),
+        readSchoolValue(details, ['COMPLEMENTO'])
+      ].filter(Boolean).join(', ')],
+      ['Bairro / Distrito', readSchoolValue(details, ['DISTRITO_BAIRRO', 'BAIRRO']) || readSchoolValue(school, ['bairro'])],
+      ['CEP', readSchoolValue(details, ['CEP']) || readSchoolValue(school, ['cep'])],
+      ['Zona', school.zona || readSchoolValue(details, ['ZONA'])],
+      ['Telefone', school.telefones || readSchoolValue(details, ['TELEFONES', 'TELEFONE'])],
+      ['E-mail', school.email || readSchoolValue(details, ['EMAIL', 'E_MAIL'])],
+      ['Situação cadastral', readSchoolValue(details, ['SITUACAO_CADASTRAL', 'SITUACAO'])],
+      ['Última referência da fonte', readSchoolValue(details, ['DATA_REFERENCIA', 'DATA_ATUALIZACAO'])]
     ];
 
     schoolDetail.innerHTML = '<div class="school-detail-head"><div class="section-kicker">FICHA CADASTRAL · REDE ESTADUAL</div>' +
       '<h3>' + escapeHtml(name) + '</h3>' +
       '<div class="school-subtitle">' + escapeHtml(school.municipio) + (school.diretoria ? ' · ' + escapeHtml(school.diretoria) : '') + '</div>' +
-      '<div class="school-codes"><span class="code-pill">CIE: ' + escapeHtml(school.cie || 'não informado na exportação') + '</span><span class="code-pill">INEP: ' + escapeHtml(school.codigoInep || 'não informado na exportação') + '</span><span class="code-pill">ID interno: ' + escapeHtml(school.idInterno) + '</span></div></div>' +
+      '<div class="school-codes"><span class="code-pill">CIE: ' + escapeHtml(school.cie || 'não informado na exportação') + '</span><span class="code-pill">INEP: ' + escapeHtml(school.codigoInep || 'não informado na exportação') + '</span><span class="code-pill">ID interno: ' + escapeHtml(school.idInterno || 'não disponível') + '</span></div></div>' +
       '<div class="detail-grid">' + fields.map(function (f) { return field(f[0], f[1]); }).join('') + '</div>' +
       '<div class="indicator-block"><h4>Indicadores históricos</h4>' + renderIndicators(indicatorRows, school) + '</div>';
   }
@@ -149,18 +235,42 @@
     }
   }
 
-  async function selectSchool(cie, inep, idInterno) {
+  async function selectSchool(schoolRecord) {
+    var selectedSchool = normalizeSchoolRecord(schoolRecord);
     schoolDetail.innerHTML = '<div class="empty-state detail-empty"><span class="empty-icon">⋯</span><strong>Carregando ficha da escola</strong><p>Buscando cadastro e indicadores disponíveis.</p></div>';
     try {
-      var id = cie || inep || idInterno;
-      var type = cie ? 'cie' : (inep ? 'inep' : 'id');
-      var results = await Promise.all([
-        window.PortalAPI.obterEscola(id, type),
-        window.PortalAPI.obterIndicadores(id, type)
-      ]);
-      renderSchool(results[0], results[1]);
+      var detailPromise = window.PortalAPI.obterEscola(selectedSchool, null, selectedSchool).catch(function (error) {
+        return { ok: true, escola: selectedSchool, fallbackFromSearch: true, detailWarning: error.message };
+      });
+      var indicatorsPromise = window.PortalAPI.obterIndicadores(selectedSchool).catch(function () {
+        return { ok: true, total: 0, indicadores: [] };
+      });
+      var results = await Promise.all([detailPromise, indicatorsPromise]);
+      var detailResult = results[0] || {};
+      var indicatorResult = results[1] || { indicadores: [] };
+      var apiSchool = detailResult.escola || {};
+      var mergedRawSchool = Object.assign({}, selectedSchool);
+      Object.keys(apiSchool).forEach(function (key) {
+        var value = apiSchool[key];
+        if (value !== null && value !== undefined && String(value).trim() !== '') mergedRawSchool[key] = value;
+      });
+      var mergedSchool = normalizeSchoolRecord(mergedRawSchool);
+      if (!mergedSchool.detalhes || !Object.keys(mergedSchool.detalhes).length) {
+        mergedSchool.detalhes = selectedSchool.detalhes || {};
+      }
+      renderSchool({ escola: mergedSchool }, indicatorResult);
       setApiState('online', 'Base conectada');
+      if (detailResult.fallbackFromSearch) {
+        showToast('Ficha aberta com os dados retornados pela busca. Alguns detalhes podem não estar disponíveis.', false);
+      }
     } catch (error) {
+      // Salvaguarda final: o card selecionado é um objeto válido da busca,
+      // portanto não descartamos a ficha por falha na rota de detalhe.
+      if (selectedSchool && (selectedSchool.nome || selectedSchool.municipio || selectedSchool.idInterno)) {
+        renderSchool({ escola: selectedSchool }, { indicadores: [] });
+        showToast('Ficha básica aberta com os dados da busca. Indicadores ou detalhes adicionais indisponíveis.', false);
+        return;
+      }
       schoolDetail.innerHTML = '<div class="empty-state detail-empty"><strong>Não foi possível abrir a ficha</strong><p>' + escapeHtml(error.message) + '</p></div>';
       showToast(error.message || 'Falha ao abrir a ficha da escola.', true);
     }
@@ -201,5 +311,6 @@
     if (value.length >= 3) debounceTimer = window.setTimeout(doSearch, 650);
   });
   setupTabs();
+  initFooter();
   checkHealth();
 })();
